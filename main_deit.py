@@ -7,6 +7,7 @@ import time
 import torch
 import torch.backends.cudnn as cudnn
 import json
+import yaml
 import os
 
 from pathlib import Path
@@ -35,6 +36,7 @@ def get_args_parser():
     )
     parser.add_argument("--batch-size", default=64, type=int)
     parser.add_argument("--epochs", default=300, type=int)
+    parser.add_argument("--config_yaml", default="ravit/recipe.yaml", type=str)
 
     # Model parameters
     parser.add_argument(
@@ -390,6 +392,9 @@ def get_args_parser():
 
 
 def main(args):
+    if args.output_dir:
+        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+
     utils.init_distributed_mode(args)
 
     print(args)
@@ -635,7 +640,6 @@ def main(args):
     if utils.is_main_process() and args.wandb_project:
         import wandb
 
-        os.environ["WANDB_API_KEY"] = "b5f5a502ed02955b69f12852c3a9aee7ada7b889"
         wandb.init(config=args, project=args.wandb_project, name=args.wandb_name)
         wandb.watch(model, log="all")
 
@@ -715,10 +719,11 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        "DeiT training and evaluation script", parents=[get_args_parser()]
-    )
+    parser = get_args_parser()
     args = parser.parse_args()
-    if args.output_dir:
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+    if args.config_yaml:
+        with open(args.config_yaml, "r") as f:
+            new_args = yaml.safe_load(f)
+        for key, value in new_args.items():
+            setattr(args, key, value)
     main(args)

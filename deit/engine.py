@@ -6,6 +6,8 @@ Train and eval functions used in main.py
 import math
 import sys
 from typing import Iterable, Optional
+import hashlib
+import pickle
 
 import torch
 
@@ -21,21 +23,21 @@ import pdb
 
 
 def get_training_sub_network(
-    img_size_list=[128, 160, 192, 224], keep_ratio_list=[0.5, 0.7, 1]
+    img_size_list=[96, 112, 128, 160, 192, 224], keep_ratio_list=[1]
 ):
     sub_network = []
     sub_network.append((224, 1))
-    keep_ratio = random.choice(keep_ratio_list[:-1])
-    sub_network.append((224, keep_ratio))
+    # keep_ratio = random.choice(keep_ratio_list[:-1])
+    # sub_network.append((224,keep_ratio))
     size = random.choice(img_size_list[:-1])
     sub_network.append((size, 1))
-    keep_ratio = random.choice(keep_ratio_list[:-1])
-    sub_network.append((size, keep_ratio))
+    # keep_ratio = random.choice(keep_ratio_list[:-1])
+    # sub_network.append((size,keep_ratio))
     return sub_network
 
 
 def get_testing_sub_network(
-    img_size_list=[128, 160, 192, 224], keep_ratio_list=[0.5, 0.7, 1]
+    img_size_list=[96, 112, 128, 160, 192, 224], keep_ratio_list=[1]
 ):
     sub_network = []
     for img_size in img_size_list:
@@ -77,7 +79,7 @@ def super_train_one_epoch(
 
         for index, sub_network in enumerate(sub_networks):
             with torch.cuda.amp.autocast():
-                outputs = model(samples, sub_network[0], sub_network[1])
+                outputs, attn_scores = model(samples, sub_network[0], sub_network[1])
                 if index % 2 == 0:
                     # print(f'CE:{sub_network}')
                     loss = criterion(samples, outputs, targets)
@@ -106,7 +108,7 @@ def super_train_one_epoch(
                 clip_grad=max_norm,
                 parameters=model.parameters(),
                 create_graph=is_second_order,
-            )
+            )  # 这里只计算当前梯度，而没有更新网络的参数，因为loss_scaler中的step被注释掉了
 
         loss_scaler._scaler.step(optimizer)
         loss_scaler._scaler.update()
@@ -132,14 +134,35 @@ def super_evaluate(data_loader, model, device):
     # switch to evaluation mode
     model.eval()
 
+    images_hash_all_batches, target_all_batches = [], torch.tensor([])
+    outputs_all_batches, attn_scores_all_batches = torch.tensor([]), [
+        torch.tensor([]) for _ in range(len(sub_networks))
+    ]
+
     for images, target in metric_logger.log_every(data_loader, 10, header):
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
 
+        images_hash = [
+            int(hashlib.md5(i.detach().cpu().numpy()).hexdigest(), 16) for i in images
+        ]
+        target_all_batches = torch.cat(
+            [target_all_batches, target.detach().cpu()], dim=0
+        )
+
         # compute output
-        for sub_network in sub_networks:
+        outputs_all_sub = torch.tensor([])
+
+        for i, sub_network in enumerate(sub_networks):
             with torch.cuda.amp.autocast():
-                output = model(images, sub_network[0], sub_network[1])
+                output, attn_scores = model(images, sub_network[0], sub_network[1])
+
+            outputs_all_sub = torch.concat(
+                [outputs_all_sub, output.unsqueeze(0).detach().cpu()], dim=0
+            )
+            attn_scores_all_batches[i] = torch.concat(
+                [attn_scores_all_batches[i], attn_scores.detach().cpu()], dim=0
+            )
 
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
 
@@ -150,6 +173,23 @@ def super_evaluate(data_loader, model, device):
             metric_logger.meters[f"{sub_network[0]}_{sub_network[1]}_acc5"].update(
                 acc5.item(), n=batch_size
             )
+
+        images_hash_all_batches += images_hash
+        outputs_all_batches = torch.concat(
+            [outputs_all_batches, outputs_all_sub], dim=1
+        )
+
+    with open("dump.pkl", "wb") as f:
+        pickle.dump(
+            {
+                "images": images_hash_all_batches,
+                "target": target_all_batches,
+                "outputs": outputs_all_batches,
+                "attn_scores": attn_scores_all_batches,
+            },
+            f,
+        )
+
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     for sub_network in sub_networks:

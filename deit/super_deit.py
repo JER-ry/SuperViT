@@ -192,17 +192,17 @@ class Block(nn.Module):
     def forward(self, x, keep_ratio):
         x2, attn = self.attn(self.norm1(x))
         x = x + self.drop_path(x2)
-        if not keep_ratio == 1:
+        score = attn.mean(dim=1)[:, 0, 1:]
+        if keep_ratio != 1:
             B, cur_token_num = x.shape[0], x.shape[1]
             important_token_num = math.ceil(keep_ratio * cur_token_num)
-            score = attn.mean(dim=1)[:, 0, 1:]
             sorted_index = torch.argsort(score, dim=1, descending=True)
             important_index = sorted_index[:, :important_token_num]
             cls_index = torch.zeros((B, 1)).cuda().long()
             important_index = torch.cat((cls_index, important_index + 1), dim=1)
             x = batch_index_select(x, important_index)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
-        return x
+        return x, score
 
 
 class PatchEmbed(nn.Module):
@@ -237,7 +237,11 @@ class MultiResoPatchEmbed(nn.Module):
     """
 
     def __init__(
-        self, img_size_list=[112, 224], patch_size=16, in_chans=3, embed_dim=768
+        self,
+        img_size_list=[96, 112, 128, 160, 192, 224],
+        patch_size=16,
+        in_chans=3,
+        embed_dim=768,
     ):
         super().__init__()
         img_size_list = [to_2tuple(k) for k in img_size_list]
@@ -267,7 +271,7 @@ class VisionTransformer(nn.Module):
 
     def __init__(
         self,
-        img_size_list=[128, 160, 192, 224],
+        img_size_list=[96, 112, 128, 160, 192, 224],
         patch_size=16,
         in_chans=3,
         num_classes=1000,
@@ -397,33 +401,49 @@ class VisionTransformer(nn.Module):
         )
 
     def forward_features(self, x, img_size, keep_ratio):
+        # x: [B, C, H, W], e.g. [512, 3, 224, 224]
         B = x.shape[0]
         x = self.patch_embed(x)
+        # x: [B, num_patches, embed_dim], e.g. [512, 196=(224/16)**2, 768]
 
         cls_tokens = self.cls_token.expand(
             B, -1, -1
         )  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
+        # x: [B, num_patches+1, embed_dim], e.g. [512, 197=196+1, 768]
         x = x + self.pos_embed_list[self.img_size_list.index(img_size)]
         x = self.pos_drop(x)
 
+        attn_scores = torch.tensor([], device=x.device)
         for index, blk in enumerate(self.blocks):
             layer_keep_ratio = keep_ratio if index in [3, 6, 9] else 1
-            x = blk(x, layer_keep_ratio)
+            x, score = blk(x, layer_keep_ratio)
+            attn_scores = torch.concat([attn_scores, score.unsqueeze(1)], dim=1)
+            # TODO this way of collecting attn_scores requires keep_ratio=1 in function VisionTransformer.forward
+            # since if you drop some attention heads, the dim would be different. you may consider using a list in that case.
+
+        # x:    [B,       num_patches+1               , embed_dim]
+        #    -> [B, ceil((num_patches+1)*keep_ratio)+1, embed_dim]
+        #       inside block[3] (index starts from 0)
+        #    -> ...,
+        #    e.g. [512, 197, 768] -> [512, 139=ceil(197*0.7)+1, 768] -> ...
 
         x = self.norm(x)[:, 0]
+        # x: [B, embed_dim]
         x = self.pre_logits(x)
-        return x
+        return x, attn_scores
 
-    def forward(self, x, img_size=224, keep_ratio=0.7):
+    def forward(self, x, img_size=None, keep_ratio=1):
+        if img_size is None:
+            img_size = self.img_size_list[-1]
         x = F.interpolate(x, (img_size, img_size), mode="bilinear", align_corners=True)
         self.current_img_size = img_size
         self.current_patch_num = self.patch_embed.num_patches_list[
             self.img_size_list.index(img_size)
         ]
-        x = self.forward_features(x, img_size, keep_ratio)
+        x, attn_scores = self.forward_features(x, img_size, keep_ratio)
         x = self.head(x)
-        return x
+        return x, attn_scores
 
 
 @register_model
@@ -432,6 +452,7 @@ def super_deit_s(pretrained=False, **kwargs):
     ImageNet-1k weights from https://github.com/facebookresearch/deit.
     """
     model = VisionTransformer(
+        img_size_list=[96, 112, 128, 160, 192, 224],
         patch_size=16,
         embed_dim=384,
         depth=12,
