@@ -15,17 +15,17 @@ def get_attn(attn_type):
     if attn_type is not None:
         if isinstance(attn_type, str):
             attn_type = attn_type.lower()
-            if attn_type == 'se':
+            if attn_type == "se":
                 module_cls = SEModule
-            elif attn_type == 'ese':
+            elif attn_type == "ese":
                 module_cls = EffectiveSEModule
-            elif attn_type == 'eca':
+            elif attn_type == "eca":
                 module_cls = EcaModule
-            elif attn_type == 'ceca':
+            elif attn_type == "ceca":
                 module_cls = CecaModule
-            elif attn_type == 'cbam':
+            elif attn_type == "cbam":
                 module_cls = CbamModule
-            elif attn_type == 'lcbam':
+            elif attn_type == "lcbam":
                 module_cls = LightCbamModule
             else:
                 assert False, "Invalid attn module (%s)" % attn_type

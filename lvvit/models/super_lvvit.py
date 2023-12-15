@@ -11,33 +11,37 @@ from .layers import *
 import pdb
 
 
-
-
-def _cfg(url='', **kwargs):
+def _cfg(url="", **kwargs):
     return {
-        'url': url,
-        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': None,
-        'crop_pct': .9, 'interpolation': 'bicubic',
-        'mean': (0.485, 0.456, 0.406), 'std': (0.229, 0.224, 0.225),
-        'classifier': 'head',
-        **kwargs
+        "url": url,
+        "num_classes": 1000,
+        "input_size": (3, 224, 224),
+        "pool_size": None,
+        "crop_pct": 0.9,
+        "interpolation": "bicubic",
+        "mean": (0.485, 0.456, 0.406),
+        "std": (0.229, 0.224, 0.225),
+        "classifier": "head",
+        **kwargs,
     }
 
+
 default_cfgs = {
-    'LV_ViT_Tiny': _cfg(),
-    'LV_ViT': _cfg(),
-    'LV_ViT_Medium': _cfg(crop_pct=1.0),
-    'LV_ViT_Large': _cfg(crop_pct=1.0),
+    "LV_ViT_Tiny": _cfg(),
+    "LV_ViT": _cfg(),
+    "LV_ViT_Medium": _cfg(crop_pct=1.0),
+    "LV_ViT_Large": _cfg(crop_pct=1.0),
 }
 
+
 def get_block(block_type, **kargs):
-    if block_type=='mha':
+    if block_type == "mha":
         # multi-head attention block
         return MHABlock(**kargs)
-    elif block_type=='ffn':
+    elif block_type == "ffn":
         # feed forward block
         return FFNBlock(**kargs)
-    elif block_type=='tr':
+    elif block_type == "tr":
         # transformer block
         return Block(**kargs)
 
@@ -45,7 +49,7 @@ def get_block(block_type, **kargs):
 def rand_bbox(size, lam):
     W = size[2]
     H = size[3]
-    cut_rat = np.sqrt(1. - lam)
+    cut_rat = np.sqrt(1.0 - lam)
     cut_w = np.int(W * cut_rat)
     cut_h = np.int(H * cut_rat)
 
@@ -61,22 +65,24 @@ def rand_bbox(size, lam):
     return bbx1, bby1, bbx2, bby2
 
 
-def get_dpr(drop_path_rate,depth,drop_path_decay='linear'):
-    if drop_path_decay=='linear':
+def get_dpr(drop_path_rate, depth, drop_path_decay="linear"):
+    if drop_path_decay == "linear":
         # linear dpr decay
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
-    elif drop_path_decay=='fix':
+        dpr = [
+            x.item() for x in torch.linspace(0, drop_path_rate, depth)
+        ]  # stochastic depth decay rule
+    elif drop_path_decay == "fix":
         # use fixed dpr
-        dpr= [drop_path_rate]*depth
+        dpr = [drop_path_rate] * depth
     else:
         # use predefined drop_path_rate list
-        assert len(drop_path_rate)==depth
-        dpr=drop_path_rate
+        assert len(drop_path_rate) == depth
+        dpr = drop_path_rate
     return dpr
 
 
 class LV_ViT(nn.Module):
-    """ Vision Transformer with tricks
+    """Vision Transformer with tricks
     Arguements:
         p_emb: different conv based position embedding (default: 4 layer conv)
         skip_lam: residual scalar for skip connection (default: 1.0)
@@ -84,72 +90,134 @@ class LV_ViT(nn.Module):
         mix_token: use mix token augmentation for batch of tokens (default: False)
         return_dense: whether to return feature of all tokens with an additional aux_head (default: False)
     """
-    def __init__(self, img_size_list=[128, 160, 192, 224], patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
-                 num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
-                 drop_path_rate=0., drop_path_decay='linear', hybrid_backbone=None, norm_layer=nn.LayerNorm, p_emb='4_2', head_dim = None,
-                 skip_lam = 1.0,order=None, mix_token=False, return_dense=False):
+
+    def __init__(
+        self,
+        img_size_list=[128, 160, 192, 224],
+        patch_size=16,
+        in_chans=3,
+        num_classes=1000,
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        mlp_ratio=4.0,
+        qkv_bias=False,
+        qk_scale=None,
+        drop_rate=0.0,
+        attn_drop_rate=0.0,
+        drop_path_rate=0.0,
+        drop_path_decay="linear",
+        hybrid_backbone=None,
+        norm_layer=nn.LayerNorm,
+        p_emb="4_2",
+        head_dim=None,
+        skip_lam=1.0,
+        order=None,
+        mix_token=False,
+        return_dense=False,
+    ):
         super().__init__()
         self.num_classes = num_classes
-        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
-        self.output_dim = embed_dim if num_classes==0 else num_classes
+        self.num_features = (
+            self.embed_dim
+        ) = embed_dim  # num_features for consistency with other models
+        self.output_dim = embed_dim if num_classes == 0 else num_classes
         self.img_size_list = img_size_list
-        if p_emb=='4_2':
+        if p_emb == "4_2":
             patch_embed_fn = PatchEmbed4_2
-        elif p_emb=='4_2_128':
+        elif p_emb == "4_2_128":
             patch_embed_fn = PatchEmbed4_2_128
         else:
             patch_embed_fn = PatchEmbedNaive
 
-        self.patch_embed = patch_embed_fn(img_size=max(img_size_list), patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
+        self.patch_embed = patch_embed_fn(
+            img_size=max(img_size_list),
+            patch_size=patch_size,
+            in_chans=in_chans,
+            embed_dim=embed_dim,
+        )
 
         num_patches_list = [64, 100, 144, 196]
 
-
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.pos_embed_list = [nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim)) for num_patches in num_patches_list]
+        self.pos_embed_list = [
+            nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
+            for num_patches in num_patches_list
+        ]
         self.pos_embed_list = nn.ParameterList(self.pos_embed_list)
         self.pos_drop = nn.Dropout(p=drop_rate)
 
         if order is None:
-            dpr=get_dpr(drop_path_rate, depth, drop_path_decay)
-            self.blocks = nn.ModuleList([
-                Block(
-                    dim=embed_dim, num_heads=num_heads, head_dim=head_dim, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                    drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, skip_lam=skip_lam)
-                for i in range(depth)])
+            dpr = get_dpr(drop_path_rate, depth, drop_path_decay)
+            self.blocks = nn.ModuleList(
+                [
+                    Block(
+                        dim=embed_dim,
+                        num_heads=num_heads,
+                        head_dim=head_dim,
+                        mlp_ratio=mlp_ratio,
+                        qkv_bias=qkv_bias,
+                        qk_scale=qk_scale,
+                        drop=drop_rate,
+                        attn_drop=attn_drop_rate,
+                        drop_path=dpr[i],
+                        norm_layer=norm_layer,
+                        skip_lam=skip_lam,
+                    )
+                    for i in range(depth)
+                ]
+            )
         else:
             # use given order to sequentially generate modules
-            dpr=get_dpr(drop_path_rate, len(order), drop_path_decay)
-            self.blocks = nn.ModuleList([
-                get_block(order[i],
-                    dim=embed_dim, num_heads=num_heads, head_dim=head_dim, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                    drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, skip_lam=skip_lam)
-                for i in range(len(order))])
+            dpr = get_dpr(drop_path_rate, len(order), drop_path_decay)
+            self.blocks = nn.ModuleList(
+                [
+                    get_block(
+                        order[i],
+                        dim=embed_dim,
+                        num_heads=num_heads,
+                        head_dim=head_dim,
+                        mlp_ratio=mlp_ratio,
+                        qkv_bias=qkv_bias,
+                        qk_scale=qk_scale,
+                        drop=drop_rate,
+                        attn_drop=attn_drop_rate,
+                        drop_path=dpr[i],
+                        norm_layer=norm_layer,
+                        skip_lam=skip_lam,
+                    )
+                    for i in range(len(order))
+                ]
+            )
 
         self.norm = norm_layer(embed_dim)
-        self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
-        
-        self.return_dense=return_dense
-        self.mix_token=mix_token
+        self.head = (
+            nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        )
+
+        self.return_dense = return_dense
+        self.mix_token = mix_token
 
         if return_dense:
-            self.aux_head=nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+            self.aux_head = (
+                nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+            )
         if mix_token:
             self.beta = 1.0
             assert return_dense, "always return all features when mixtoken is enabled"
 
         for pos_embed in self.pos_embed_list:
-            trunc_normal_(pos_embed, std=.02)
-        trunc_normal_(self.cls_token, std=.02)
+            trunc_normal_(pos_embed, std=0.02)
+        trunc_normal_(self.cls_token, std=0.02)
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
+            trunc_normal_(m.weight, std=0.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, GroupLinear):
-            trunc_normal_(m.group_weight, std=.02)
+            trunc_normal_(m.group_weight, std=0.02)
             if isinstance(m, GroupLinear) and m.group_bias is not None:
                 nn.init.constant_(m.group_bias, 0)
         elif isinstance(m, nn.LayerNorm):
@@ -158,18 +226,21 @@ class LV_ViT(nn.Module):
 
     @torch.jit.ignore
     def no_weight_decay(self):
-        return {'pos_embed_list', 'cls_token'}
+        return {"pos_embed_list", "cls_token"}
 
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=''):
+    def reset_classifier(self, num_classes, global_pool=""):
         self.num_classes = num_classes
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
-    
-    def forward_embeddings(self,x):
+        self.head = (
+            nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        )
+
+    def forward_embeddings(self, x):
         x = self.patch_embed(x)
         return x
+
     def forward_tokens(self, x, img_size, keep_ratio):
         B = x.shape[0]
         cls_tokens = self.cls_token.expand(B, -1, -1)
@@ -177,21 +248,20 @@ class LV_ViT(nn.Module):
         x = x + self.pos_embed_list[self.img_size_list.index(img_size)]
         x = self.pos_drop(x)
         for index, blk in enumerate(self.blocks):
-            layer_keep_ratio = keep_ratio if index in  [3,6,9] else 1
+            layer_keep_ratio = keep_ratio if index in [3, 6, 9] else 1
             x = blk(x, layer_keep_ratio)
         x = self.norm(x)
         return x
 
-
     def forward(self, x, img_size=224, keep_ratio=0.7, bbox=None):
-        x = F.interpolate(x, (img_size, img_size), mode='bilinear', align_corners=True)
+        x = F.interpolate(x, (img_size, img_size), mode="bilinear", align_corners=True)
         self.current_img_size = img_size
         x = self.forward_embeddings(x)
 
-        # token level mixtoken augmentation 
+        # token level mixtoken augmentation
         if self.mix_token and self.training:
             # lam = np.random.beta(self.beta, self.beta)
-            patch_h, patch_w = x.shape[2],x.shape[3]
+            patch_h, patch_w = x.shape[2], x.shape[3]
             # bbx1, bby1, bbx2, bby2 = rand_bbox(x.size(), lam)
             bbx1, bby1, bbx2, bby2 = bbox
             temp_x = x.clone()
@@ -199,25 +269,28 @@ class LV_ViT(nn.Module):
             temp_x[:, :, bbx1:bbx2, bby1:bby2] = x.flip(0)[:, :, bbx1:bbx2, bby1:bby2]
             x = temp_x
         else:
-            bbx1, bby1, bbx2, bby2 = 0,0,0,0
+            bbx1, bby1, bbx2, bby2 = 0, 0, 0, 0
 
         x = x.flatten(2).transpose(1, 2)
         x = self.forward_tokens(x, img_size, keep_ratio)
-        x_cls = self.head(x[:,0])
-
+        x_cls = self.head(x[:, 0])
 
         if self.return_dense:
-            x_aux = self.aux_head(x[:,1:])
+            x_aux = self.aux_head(x[:, 1:])
             if not self.training:
-                return x_cls+0.25*x_aux.max(1)[0]
+                return x_cls + 0.25 * x_aux.max(1)[0]
 
             # recover the mixed part
-            if self.mix_token and self.training and img_size==224 and keep_ratio==1:
-                x_aux = x_aux.reshape(x_aux.shape[0],patch_h, patch_w,x_aux.shape[-1])
+            if self.mix_token and self.training and img_size == 224 and keep_ratio == 1:
+                x_aux = x_aux.reshape(x_aux.shape[0], patch_h, patch_w, x_aux.shape[-1])
                 temp_x = x_aux.clone()
-                temp_x[:, bbx1:bbx2, bby1:bby2, :] = x_aux.flip(0)[:, bbx1:bbx2, bby1:bby2, :]
+                temp_x[:, bbx1:bbx2, bby1:bby2, :] = x_aux.flip(0)[
+                    :, bbx1:bbx2, bby1:bby2, :
+                ]
                 x_aux = temp_x
-                x_aux = x_aux.reshape(x_aux.shape[0],patch_h*patch_w,x_aux.shape[-1])
+                x_aux = x_aux.reshape(
+                    x_aux.shape[0], patch_h * patch_w, x_aux.shape[-1]
+                )
 
                 return x_cls, x_aux, (bbx1, bby1, bbx2, bby2)
         return x_cls
@@ -225,10 +298,17 @@ class LV_ViT(nn.Module):
 
 @register_model
 def super_lvvit_s(pretrained=False, **kwargs):
-    model = LV_ViT(patch_size=16, embed_dim=384, depth=16, num_heads=6, mlp_ratio=3.,
-        p_emb='4_2',skip_lam=2., return_dense=True,mix_token=True, **kwargs)
-    model.default_cfg = default_cfgs['LV_ViT']
+    model = LV_ViT(
+        patch_size=16,
+        embed_dim=384,
+        depth=16,
+        num_heads=6,
+        mlp_ratio=3.0,
+        p_emb="4_2",
+        skip_lam=2.0,
+        return_dense=True,
+        mix_token=True,
+        **kwargs
+    )
+    model.default_cfg = default_cfgs["LV_ViT"]
     return model
-
-
-

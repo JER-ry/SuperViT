@@ -7,6 +7,7 @@ class LabelSmoothingCrossEntropy(nn.Module):
     """
     NLL loss with label smoothing.
     """
+
     def __init__(self, smoothing=0.1):
         """
         Constructor for the LabelSmoothing module.
@@ -15,7 +16,7 @@ class LabelSmoothingCrossEntropy(nn.Module):
         super(LabelSmoothingCrossEntropy, self).__init__()
         assert smoothing < 1.0
         self.smoothing = smoothing
-        self.confidence = 1. - smoothing
+        self.confidence = 1.0 - smoothing
 
     def forward(self, x, target):
         logprobs = F.log_softmax(x, dim=-1)
@@ -27,7 +28,6 @@ class LabelSmoothingCrossEntropy(nn.Module):
 
 
 class SoftTargetCrossEntropy(nn.Module):
-
     def __init__(self):
         super(SoftTargetCrossEntropy, self).__init__()
 

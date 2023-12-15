@@ -15,22 +15,29 @@ from PIL import Image
 
 try:
     import tensorflow as tf
-    tf.config.set_visible_devices([], 'GPU')  # Hands off my GPU! (or pip install tensorflow-cpu)
+
+    tf.config.set_visible_devices(
+        [], "GPU"
+    )  # Hands off my GPU! (or pip install tensorflow-cpu)
     import tensorflow_datasets as tfds
 except ImportError as e:
     print(e)
-    print("Please install tensorflow_datasets package `pip install tensorflow-datasets`.")
+    print(
+        "Please install tensorflow_datasets package `pip install tensorflow-datasets`."
+    )
     exit(1)
 from .parser import Parser
 
 
-MAX_TP_SIZE = 8  # maximum TF threadpool size, only doing jpeg decodes and queuing activities
+MAX_TP_SIZE = (
+    8  # maximum TF threadpool size, only doing jpeg decodes and queuing activities
+)
 SHUFFLE_SIZE = 16834  # samples to shuffle in DS queue
 PREFETCH_SIZE = 4096  # samples to prefetch
 
 
 class ParserTfds(Parser):
-    """ Wrap Tensorflow Datasets for use in PyTorch
+    """Wrap Tensorflow Datasets for use in PyTorch
 
     There several things to be aware of:
       * To prevent excessive samples being dropped per epoch w/ distributed training or multiplicity of
@@ -52,15 +59,25 @@ class ParserTfds(Parser):
         components.
 
     """
-    def __init__(self, root, name, split='train', shuffle=False, is_training=False, batch_size=None):
+
+    def __init__(
+        self,
+        root,
+        name,
+        split="train",
+        shuffle=False,
+        is_training=False,
+        batch_size=None,
+    ):
         super().__init__()
         self.root = root
         self.split = split
         self.shuffle = shuffle
         self.is_training = is_training
         if self.is_training:
-            assert batch_size is not None,\
-                "Must specify batch_size in training mode for reasonable behaviour w/ TFDS wrapper"
+            assert (
+                batch_size is not None
+            ), "Must specify batch_size in training mode for reasonable behaviour w/ TFDS wrapper"
         self.batch_size = batch_size
 
         self.builder = tfds.builder(name, data_dir=root)
@@ -77,7 +94,7 @@ class ParserTfds(Parser):
             self.dist_num_replicas = dist.get_world_size()
 
     def _lazy_init(self):
-        """ Lazily initialize the dataset.
+        """Lazily initialize the dataset.
 
         This is necessary to init the Tensorflow dataset pipeline in the (dataloader) process that
         will be using the dataset instance. The __init__ method is called on the main process,
@@ -118,20 +135,26 @@ class ParserTfds(Parser):
         input_context = tf.distribute.InputContext(
             num_input_pipelines=self.dist_num_replicas * num_workers,
             input_pipeline_id=self.dist_rank * num_workers + worker_id,
-            num_replicas_in_sync=self.dist_num_replicas  # FIXME does this have any impact?
+            num_replicas_in_sync=self.dist_num_replicas,  # FIXME does this have any impact?
         )
 
         read_config = tfds.ReadConfig(input_context=input_context)
-        ds = self.builder.as_dataset(split=split, shuffle_files=self.shuffle, read_config=read_config)
+        ds = self.builder.as_dataset(
+            split=split, shuffle_files=self.shuffle, read_config=read_config
+        )
         # avoid overloading threading w/ combo fo TF ds threads + PyTorch workers
-        ds.options().experimental_threading.private_threadpool_size = max(1, MAX_TP_SIZE // num_workers)
+        ds.options().experimental_threading.private_threadpool_size = max(
+            1, MAX_TP_SIZE // num_workers
+        )
         ds.options().experimental_threading.max_intra_op_parallelism = 1
         if self.is_training:
             # to prevent excessive drop_last batch behaviour w/ IterableDatasets
             # see warnings at https://pytorch.org/docs/stable/data.html#multi-process-data-loading
             ds = ds.repeat()  # allow wrap around and break iteration manually
         if self.shuffle:
-            ds = ds.shuffle(min(self.num_samples // self._num_pipelines, SHUFFLE_SIZE), seed=0)
+            ds = ds.shuffle(
+                min(self.num_samples // self._num_pipelines, SHUFFLE_SIZE), seed=0
+            )
         ds = ds.prefetch(min(self.num_samples // self._num_pipelines, PREFETCH_SIZE))
         self.ds = tfds.as_numpy(ds)
 
@@ -146,23 +169,31 @@ class ParserTfds(Parser):
         target_sample_count = math.ceil(self.num_samples / self._num_pipelines)
         if self.is_training:
             # round up to nearest batch_size per worker-replica
-            target_sample_count = math.ceil(target_sample_count / self.batch_size) * self.batch_size
+            target_sample_count = (
+                math.ceil(target_sample_count / self.batch_size) * self.batch_size
+            )
         sample_count = 0
         for sample in self.ds:
-            img = Image.fromarray(sample['image'], mode='RGB')
-            yield img, sample['label']
+            img = Image.fromarray(sample["image"], mode="RGB")
+            yield img, sample["label"]
             sample_count += 1
             if self.is_training and sample_count >= target_sample_count:
                 # Need to break out of loop when repeat() is enabled for training w/ oversampling
                 # this results in extra samples per epoch but seems more desirable than dropping
                 # up to N*J batches per epoch (where N = num distributed processes, and J = num worker processes)
                 break
-        if not self.is_training and self.dist_num_replicas and 0 < sample_count < target_sample_count:
+        if (
+            not self.is_training
+            and self.dist_num_replicas
+            and 0 < sample_count < target_sample_count
+        ):
             # Validation batch padding only done for distributed training where results are reduced across nodes.
             # For single process case, it won't matter if workers return different batch sizes.
             # FIXME this needs more testing, possible for sharding / split api to cause differences of > 1?
-            assert target_sample_count - sample_count == 1  # should only be off by 1 or sharding is not optimal
-            yield img, sample['label']  # yield prev sample again
+            assert (
+                target_sample_count - sample_count == 1
+            )  # should only be off by 1 or sharding is not optimal
+            yield img, sample["label"]  # yield prev sample again
             sample_count += 1
 
     @property
@@ -179,22 +210,22 @@ class ParserTfds(Parser):
         return math.ceil(self.num_samples / self.dist_num_replicas)
 
     def _filename(self, index, basename=False, absolute=False):
-        assert False, "Not supported" # no random access to samples
+        assert False, "Not supported"  # no random access to samples
 
     def filenames(self, basename=False, absolute=False):
-        """ Return all filenames in dataset, overrides base"""
+        """Return all filenames in dataset, overrides base"""
         if self.ds is None:
             self._lazy_init()
         names = []
         for sample in self.ds:
             if len(names) > self.num_samples:
                 break  # safety for ds.repeat() case
-            if 'file_name' in sample:
-                name = sample['file_name']
-            elif 'filename' in sample:
-                name = sample['filename']
-            elif 'id' in sample:
-                name = sample['id']
+            if "file_name" in sample:
+                name = sample["file_name"]
+            elif "filename" in sample:
+                name = sample["filename"]
+            elif "id" in sample:
+                name = sample["id"]
             else:
                 assert False, "No supported name field present"
             names.append(name)

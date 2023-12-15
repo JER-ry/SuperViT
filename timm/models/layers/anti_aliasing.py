@@ -5,7 +5,13 @@ import torch.nn.functional as F
 
 
 class AntiAliasDownsampleLayer(nn.Module):
-    def __init__(self, channels: int = 0, filt_size: int = 3, stride: int = 2, no_jit: bool = False):
+    def __init__(
+        self,
+        channels: int = 0,
+        filt_size: int = 3,
+        stride: int = 2,
+        no_jit: bool = False,
+    ):
         super(AntiAliasDownsampleLayer, self).__init__()
         if no_jit:
             self.op = Downsample(channels, filt_size, stride)
@@ -29,13 +35,13 @@ class DownsampleJIT(object):
         self.filt = {}  # lazy init by device for DataParallel compat
 
     def _create_filter(self, like: torch.Tensor):
-        filt = torch.tensor([1., 2., 1.], dtype=like.dtype, device=like.device)
+        filt = torch.tensor([1.0, 2.0, 1.0], dtype=like.dtype, device=like.device)
         filt = filt[:, None] * filt[None, :]
         filt = filt / torch.sum(filt)
         return filt[None, None, :, :].repeat((self.channels, 1, 1, 1))
 
     def __call__(self, input: torch.Tensor):
-        input_pad = F.pad(input, (1, 1, 1, 1), 'reflect')
+        input_pad = F.pad(input, (1, 1, 1, 1), "reflect")
         filt = self.filt.get(str(input.device), self._create_filter(input))
         return F.conv2d(input_pad, filt, stride=2, padding=0, groups=input.shape[1])
 
@@ -48,13 +54,17 @@ class Downsample(nn.Module):
         self.stride = stride
 
         assert self.filt_size == 3
-        filt = torch.tensor([1., 2., 1.])
+        filt = torch.tensor([1.0, 2.0, 1.0])
         filt = filt[:, None] * filt[None, :]
         filt = filt / torch.sum(filt)
 
         # self.filt = filt[None, None, :, :].repeat((self.channels, 1, 1, 1))
-        self.register_buffer('filt', filt[None, None, :, :].repeat((self.channels, 1, 1, 1)))
+        self.register_buffer(
+            "filt", filt[None, None, :, :].repeat((self.channels, 1, 1, 1))
+        )
 
     def forward(self, input):
-        input_pad = F.pad(input, (1, 1, 1, 1), 'reflect')
-        return F.conv2d(input_pad, self.filt, stride=self.stride, padding=0, groups=input.shape[1])
+        input_pad = F.pad(input, (1, 1, 1, 1), "reflect")
+        return F.conv2d(
+            input_pad, self.filt, stride=self.stride, padding=0, groups=input.shape[1]
+        )

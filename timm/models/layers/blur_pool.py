@@ -39,11 +39,15 @@ class BlurPool2d(nn.Module):
         self.stride = stride
         pad_size = [get_padding(filt_size, stride, dilation=1)] * 4
         self.padding = nn.ReflectionPad2d(pad_size)
-        self._coeffs = torch.tensor((np.poly1d((0.5, 0.5)) ** (self.filt_size - 1)).coeffs)  # for torchscript compat
+        self._coeffs = torch.tensor(
+            (np.poly1d((0.5, 0.5)) ** (self.filt_size - 1)).coeffs
+        )  # for torchscript compat
         self.filt = {}  # lazy init by device for DataParallel compat
 
     def _create_filter(self, like: torch.Tensor):
-        blur_filter = (self._coeffs[:, None] * self._coeffs[None, :]).to(dtype=like.dtype, device=like.device)
+        blur_filter = (self._coeffs[:, None] * self._coeffs[None, :]).to(
+            dtype=like.dtype, device=like.device
+        )
         return blur_filter[None, None, :, :].repeat(self.channels, 1, 1, 1)
 
     def _apply(self, fn):
@@ -53,6 +57,9 @@ class BlurPool2d(nn.Module):
 
     def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
         C = input_tensor.shape[1]
-        blur_filt = self.filt.get(str(input_tensor.device), self._create_filter(input_tensor))
+        blur_filt = self.filt.get(
+            str(input_tensor.device), self._create_filter(input_tensor)
+        )
         return F.conv2d(
-            self.padding(input_tensor), blur_filt, stride=self.stride, groups=C)
+            self.padding(input_tensor), blur_filt, stride=self.stride, groups=C
+        )

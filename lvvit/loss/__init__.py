@@ -1,1 +1,1 @@
-from .cross_entropy import TokenLabelCrossEntropy,TokenLabelSoftTargetCrossEntropy
+from .cross_entropy import TokenLabelCrossEntropy, TokenLabelSoftTargetCrossEntropy

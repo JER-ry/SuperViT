@@ -18,9 +18,15 @@ def _kernel_valid(k):
 
 
 class SelectiveKernelAttn(nn.Module):
-    def __init__(self, channels, num_paths=2, attn_channels=32,
-                 act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d):
-        """ Selective Kernel Attention Module
+    def __init__(
+        self,
+        channels,
+        num_paths=2,
+        attn_channels=32,
+        act_layer=nn.ReLU,
+        norm_layer=nn.BatchNorm2d,
+    ):
+        """Selective Kernel Attention Module
 
         Selective Kernel attention mechanism factored out into its own module.
 
@@ -30,7 +36,9 @@ class SelectiveKernelAttn(nn.Module):
         self.fc_reduce = nn.Conv2d(channels, attn_channels, kernel_size=1, bias=False)
         self.bn = norm_layer(attn_channels)
         self.act = act_layer(inplace=True)
-        self.fc_select = nn.Conv2d(attn_channels, channels * num_paths, kernel_size=1, bias=False)
+        self.fc_select = nn.Conv2d(
+            attn_channels, channels * num_paths, kernel_size=1, bias=False
+        )
 
     def forward(self, x):
         assert x.shape[1] == self.num_paths
@@ -46,11 +54,24 @@ class SelectiveKernelAttn(nn.Module):
 
 
 class SelectiveKernelConv(nn.Module):
-
-    def __init__(self, in_channels, out_channels, kernel_size=None, stride=1, dilation=1, groups=1,
-                 attn_reduction=16, min_attn_channels=32, keep_3x3=True, split_input=False,
-                 drop_block=None, act_layer=nn.ReLU, norm_layer=nn.BatchNorm2d, aa_layer=None):
-        """ Selective Kernel Convolution Module
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=None,
+        stride=1,
+        dilation=1,
+        groups=1,
+        attn_reduction=16,
+        min_attn_channels=32,
+        keep_3x3=True,
+        split_input=False,
+        drop_block=None,
+        act_layer=nn.ReLU,
+        norm_layer=nn.BatchNorm2d,
+        aa_layer=None,
+    ):
+        """Selective Kernel Convolution Module
 
         As described in Selective Kernel Networks (https://arxiv.org/abs/1903.06586) with some modifications.
 
@@ -76,7 +97,10 @@ class SelectiveKernelConv(nn.Module):
             norm_layer (nn.Module): batchnorm/norm layer to use
         """
         super(SelectiveKernelConv, self).__init__()
-        kernel_size = kernel_size or [3, 5]  # default to one 3x3 and one 5x5 branch. 5x5 -> 3x3 + dilation
+        kernel_size = kernel_size or [
+            3,
+            5,
+        ]  # default to one 3x3 and one 5x5 branch. 5x5 -> 3x3 + dilation
         _kernel_valid(kernel_size)
         if not isinstance(kernel_size, list):
             kernel_size = [kernel_size] * 2
@@ -95,11 +119,21 @@ class SelectiveKernelConv(nn.Module):
         groups = min(out_channels, groups)
 
         conv_kwargs = dict(
-            stride=stride, groups=groups, drop_block=drop_block, act_layer=act_layer, norm_layer=norm_layer,
-            aa_layer=aa_layer)
-        self.paths = nn.ModuleList([
-            ConvBnAct(in_channels, out_channels, kernel_size=k, dilation=d, **conv_kwargs)
-            for k, d in zip(kernel_size, dilation)])
+            stride=stride,
+            groups=groups,
+            drop_block=drop_block,
+            act_layer=act_layer,
+            norm_layer=norm_layer,
+            aa_layer=aa_layer,
+        )
+        self.paths = nn.ModuleList(
+            [
+                ConvBnAct(
+                    in_channels, out_channels, kernel_size=k, dilation=d, **conv_kwargs
+                )
+                for k, d in zip(kernel_size, dilation)
+            ]
+        )
 
         attn_channels = max(int(out_channels / attn_reduction), min_attn_channels)
         self.attn = SelectiveKernelAttn(out_channels, self.num_paths, attn_channels)

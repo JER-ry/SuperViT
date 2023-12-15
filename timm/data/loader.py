@@ -17,7 +17,7 @@ from .mixup import FastCollateMixup
 
 
 def fast_collate(batch):
-    """ A fast collation function optimized for uint8 images (np array or torch) and int64 targets (labels)"""
+    """A fast collation function optimized for uint8 images (np array or torch) and int64 targets (labels)"""
     assert isinstance(batch[0], tuple)
     batch_size = len(batch)
     if isinstance(batch[0][0], tuple):
@@ -26,9 +26,13 @@ def fast_collate(batch):
         inner_tuple_size = len(batch[0][0])
         flattened_batch_size = batch_size * inner_tuple_size
         targets = torch.zeros(flattened_batch_size, dtype=torch.int64)
-        tensor = torch.zeros((flattened_batch_size, *batch[0][0][0].shape), dtype=torch.uint8)
+        tensor = torch.zeros(
+            (flattened_batch_size, *batch[0][0][0].shape), dtype=torch.uint8
+        )
         for i in range(batch_size):
-            assert len(batch[i][0]) == inner_tuple_size  # all input tensor tuples must be same length
+            assert (
+                len(batch[i][0]) == inner_tuple_size
+            )  # all input tensor tuples must be same length
             for j in range(inner_tuple_size):
                 targets[i + j * batch_size] = batch[i][1]
                 tensor[i + j * batch_size] += torch.from_numpy(batch[i][0][j])
@@ -52,16 +56,17 @@ def fast_collate(batch):
 
 
 class PrefetchLoader:
-
-    def __init__(self,
-                 loader,
-                 mean=IMAGENET_DEFAULT_MEAN,
-                 std=IMAGENET_DEFAULT_STD,
-                 fp16=False,
-                 re_prob=0.,
-                 re_mode='const',
-                 re_count=1,
-                 re_num_splits=0):
+    def __init__(
+        self,
+        loader,
+        mean=IMAGENET_DEFAULT_MEAN,
+        std=IMAGENET_DEFAULT_STD,
+        fp16=False,
+        re_prob=0.0,
+        re_mode="const",
+        re_count=1,
+        re_num_splits=0,
+    ):
         self.loader = loader
         self.mean = torch.tensor([x * 255 for x in mean]).cuda().view(1, 3, 1, 1)
         self.std = torch.tensor([x * 255 for x in std]).cuda().view(1, 3, 1, 1)
@@ -69,9 +74,13 @@ class PrefetchLoader:
         if fp16:
             self.mean = self.mean.half()
             self.std = self.std.half()
-        if re_prob > 0.:
+        if re_prob > 0.0:
             self.random_erasing = RandomErasing(
-                probability=re_prob, mode=re_mode, max_count=re_count, num_splits=re_num_splits)
+                probability=re_prob,
+                mode=re_mode,
+                max_count=re_count,
+                num_splits=re_num_splits,
+            )
         else:
             self.random_erasing = None
 
@@ -126,35 +135,35 @@ class PrefetchLoader:
 
 
 def create_loader(
-        dataset,
-        input_size,
-        batch_size,
-        is_training=False,
-        use_prefetcher=True,
-        no_aug=False,
-        re_prob=0.,
-        re_mode='const',
-        re_count=1,
-        re_split=False,
-        scale=None,
-        ratio=None,
-        hflip=0.5,
-        vflip=0.,
-        color_jitter=0.4,
-        auto_augment=None,
-        num_aug_splits=0,
-        interpolation='bilinear',
-        mean=IMAGENET_DEFAULT_MEAN,
-        std=IMAGENET_DEFAULT_STD,
-        num_workers=1,
-        distributed=False,
-        crop_pct=None,
-        collate_fn=None,
-        pin_memory=False,
-        fp16=False,
-        tf_preprocessing=False,
-        use_multi_epochs_loader=False,
-        persistent_workers=True,
+    dataset,
+    input_size,
+    batch_size,
+    is_training=False,
+    use_prefetcher=True,
+    no_aug=False,
+    re_prob=0.0,
+    re_mode="const",
+    re_count=1,
+    re_split=False,
+    scale=None,
+    ratio=None,
+    hflip=0.5,
+    vflip=0.0,
+    color_jitter=0.4,
+    auto_augment=None,
+    num_aug_splits=0,
+    interpolation="bilinear",
+    mean=IMAGENET_DEFAULT_MEAN,
+    std=IMAGENET_DEFAULT_STD,
+    num_workers=1,
+    distributed=False,
+    crop_pct=None,
+    collate_fn=None,
+    pin_memory=False,
+    fp16=False,
+    tf_preprocessing=False,
+    use_multi_epochs_loader=False,
+    persistent_workers=True,
 ):
     re_num_splits = 0
     if re_split:
@@ -193,7 +202,11 @@ def create_loader(
             sampler = OrderedDistributedSampler(dataset)
 
     if collate_fn is None:
-        collate_fn = fast_collate if use_prefetcher else torch.utils.data.dataloader.default_collate
+        collate_fn = (
+            fast_collate
+            if use_prefetcher
+            else torch.utils.data.dataloader.default_collate
+        )
 
     loader_class = torch.utils.data.DataLoader
 
@@ -202,20 +215,23 @@ def create_loader(
 
     loader_args = dict(
         batch_size=batch_size,
-        shuffle=not isinstance(dataset, torch.utils.data.IterableDataset) and sampler is None and is_training,
+        shuffle=not isinstance(dataset, torch.utils.data.IterableDataset)
+        and sampler is None
+        and is_training,
         num_workers=num_workers,
         sampler=sampler,
         collate_fn=collate_fn,
         pin_memory=pin_memory,
         drop_last=is_training,
-        persistent_workers=persistent_workers)
+        persistent_workers=persistent_workers,
+    )
     try:
         loader = loader_class(dataset, **loader_args)
     except TypeError as e:
-        loader_args.pop('persistent_workers')  # only in Pytorch 1.7+
+        loader_args.pop("persistent_workers")  # only in Pytorch 1.7+
         loader = loader_class(dataset, **loader_args)
     if use_prefetcher:
-        prefetch_re_prob = re_prob if is_training and not no_aug else 0.
+        prefetch_re_prob = re_prob if is_training and not no_aug else 0.0
         loader = PrefetchLoader(
             loader,
             mean=mean,
@@ -224,14 +240,13 @@ def create_loader(
             re_prob=prefetch_re_prob,
             re_mode=re_mode,
             re_count=re_count,
-            re_num_splits=re_num_splits
+            re_num_splits=re_num_splits,
         )
 
     return loader
 
 
 class MultiEpochsDataLoader(torch.utils.data.DataLoader):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._DataLoader__initialized = False
@@ -248,7 +263,7 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
 
 
 class _RepeatSampler(object):
-    """ Sampler that repeats forever.
+    """Sampler that repeats forever.
 
     Args:
         sampler (Sampler)

@@ -29,11 +29,25 @@ class RadixSoftmax(nn.Module):
 
 
 class SplitAttnConv2d(nn.Module):
-    """Split-Attention Conv2d
-    """
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0,
-                 dilation=1, groups=1, bias=False, radix=2, reduction_factor=4,
-                 act_layer=nn.ReLU, norm_layer=None, drop_block=None, **kwargs):
+    """Split-Attention Conv2d"""
+
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
+        bias=False,
+        radix=2,
+        reduction_factor=4,
+        act_layer=nn.ReLU,
+        norm_layer=None,
+        drop_block=None,
+        **kwargs
+    ):
         super(SplitAttnConv2d, self).__init__()
         self.radix = radix
         self.drop_block = drop_block
@@ -41,8 +55,16 @@ class SplitAttnConv2d(nn.Module):
         attn_chs = max(in_channels * radix // reduction_factor, 32)
 
         self.conv = nn.Conv2d(
-            in_channels, mid_chs, kernel_size, stride, padding, dilation,
-            groups=groups * radix, bias=bias, **kwargs)
+            in_channels,
+            mid_chs,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups=groups * radix,
+            bias=bias,
+            **kwargs
+        )
         self.bn0 = norm_layer(mid_chs) if norm_layer is not None else None
         self.act0 = act_layer(inplace=True)
         self.fc1 = nn.Conv2d(out_channels, attn_chs, 1, groups=groups)
@@ -82,7 +104,9 @@ class SplitAttnConv2d(nn.Module):
 
         x_attn = self.rsoftmax(x_attn).view(B, -1, 1, 1)
         if self.radix > 1:
-            out = (x * x_attn.reshape((B, self.radix, RC // self.radix, 1, 1))).sum(dim=1)
+            out = (x * x_attn.reshape((B, self.radix, RC // self.radix, 1, 1))).sum(
+                dim=1
+            )
         else:
             out = x * x_attn
         return out.contiguous()

@@ -13,10 +13,10 @@ def get_outdir(path, *paths, inc=False):
         os.makedirs(outdir)
     elif inc:
         count = 1
-        outdir_inc = outdir + '-' + str(count)
+        outdir_inc = outdir + "-" + str(count)
         while os.path.exists(outdir_inc):
             count = count + 1
-            outdir_inc = outdir + '-' + str(count)
+            outdir_inc = outdir + "-" + str(count)
             assert count < 100
         outdir = outdir_inc
         os.makedirs(outdir)
@@ -25,9 +25,9 @@ def get_outdir(path, *paths, inc=False):
 
 def update_summary(epoch, train_metrics, eval_metrics, filename, write_header=False):
     rowd = OrderedDict(epoch=epoch)
-    rowd.update([('train_' + k, v) for k, v in train_metrics.items()])
-    rowd.update([('eval_' + k, v) for k, v in eval_metrics.items()])
-    with open(filename, mode='a') as cf:
+    rowd.update([("train_" + k, v) for k, v in train_metrics.items()])
+    rowd.update([("eval_" + k, v) for k, v in eval_metrics.items()])
+    with open(filename, mode="a") as cf:
         dw = csv.DictWriter(cf, fieldnames=rowd.keys())
         if write_header:  # first iteration (epoch == 1 can't be used)
             dw.writeheader()

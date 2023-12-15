@@ -9,7 +9,7 @@ def unwrap_model(model):
     if isinstance(model, ModelEma):
         return unwrap_model(model.ema)
     else:
-        return model.module if hasattr(model, 'module') else model
+        return model.module if hasattr(model, "module") else model
 
 
 def get_state_dict(model, unwrap_fn=unwrap_model):

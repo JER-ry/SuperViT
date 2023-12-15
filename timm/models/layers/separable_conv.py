@@ -12,22 +12,48 @@ from .create_norm_act import convert_norm_act
 
 
 class SeparableConvBnAct(nn.Module):
-    """ Separable Conv w/ trailing Norm and Activation
-    """
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, dilation=1, padding='', bias=False,
-                 channel_multiplier=1.0, pw_kernel_size=1, norm_layer=nn.BatchNorm2d, act_layer=nn.ReLU,
-                 apply_act=True, drop_block=None):
+    """Separable Conv w/ trailing Norm and Activation"""
+
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=3,
+        stride=1,
+        dilation=1,
+        padding="",
+        bias=False,
+        channel_multiplier=1.0,
+        pw_kernel_size=1,
+        norm_layer=nn.BatchNorm2d,
+        act_layer=nn.ReLU,
+        apply_act=True,
+        drop_block=None,
+    ):
         super(SeparableConvBnAct, self).__init__()
 
         self.conv_dw = create_conv2d(
-            in_channels, int(in_channels * channel_multiplier), kernel_size,
-            stride=stride, dilation=dilation, padding=padding, depthwise=True)
+            in_channels,
+            int(in_channels * channel_multiplier),
+            kernel_size,
+            stride=stride,
+            dilation=dilation,
+            padding=padding,
+            depthwise=True,
+        )
 
         self.conv_pw = create_conv2d(
-            int(in_channels * channel_multiplier), out_channels, pw_kernel_size, padding=padding, bias=bias)
+            int(in_channels * channel_multiplier),
+            out_channels,
+            pw_kernel_size,
+            padding=padding,
+            bias=bias,
+        )
 
         norm_act_layer = convert_norm_act(norm_layer, act_layer)
-        self.bn = norm_act_layer(out_channels, apply_act=apply_act, drop_block=drop_block)
+        self.bn = norm_act_layer(
+            out_channels, apply_act=apply_act, drop_block=drop_block
+        )
 
     @property
     def in_channels(self):
@@ -46,18 +72,39 @@ class SeparableConvBnAct(nn.Module):
 
 
 class SeparableConv2d(nn.Module):
-    """ Separable Conv
-    """
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, dilation=1, padding='', bias=False,
-                 channel_multiplier=1.0, pw_kernel_size=1):
+    """Separable Conv"""
+
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=3,
+        stride=1,
+        dilation=1,
+        padding="",
+        bias=False,
+        channel_multiplier=1.0,
+        pw_kernel_size=1,
+    ):
         super(SeparableConv2d, self).__init__()
 
         self.conv_dw = create_conv2d(
-            in_channels, int(in_channels * channel_multiplier), kernel_size,
-            stride=stride, dilation=dilation, padding=padding, depthwise=True)
+            in_channels,
+            int(in_channels * channel_multiplier),
+            kernel_size,
+            stride=stride,
+            dilation=dilation,
+            padding=padding,
+            depthwise=True,
+        )
 
         self.conv_pw = create_conv2d(
-            int(in_channels * channel_multiplier), out_channels, pw_kernel_size, padding=padding, bias=bias)
+            int(in_channels * channel_multiplier),
+            out_channels,
+            pw_kernel_size,
+            padding=padding,
+            bias=bias,
+        )
 
     @property
     def in_channels(self):

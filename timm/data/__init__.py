@@ -1,5 +1,11 @@
-from .auto_augment import RandAugment, AutoAugment, rand_augment_ops, auto_augment_policy,\
-    rand_augment_transform, auto_augment_transform
+from .auto_augment import (
+    RandAugment,
+    AutoAugment,
+    rand_augment_ops,
+    auto_augment_policy,
+    rand_augment_transform,
+    auto_augment_transform,
+)
 from .config import resolve_data_config
 from .constants import *
 from .dataset import ImageDataset, IterableImageDataset, AugMixDataset

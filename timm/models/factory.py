@@ -4,13 +4,14 @@ from .layers import set_layer_config
 
 
 def create_model(
-        model_name,
-        pretrained=False,
-        checkpoint_path='',
-        scriptable=None,
-        exportable=None,
-        no_jit=None,
-        **kwargs):
+    model_name,
+    pretrained=False,
+    checkpoint_path="",
+    scriptable=None,
+    exportable=None,
+    no_jit=None,
+    **kwargs
+):
     """Create a model
 
     Args:
@@ -29,18 +30,20 @@ def create_model(
     model_args = dict(pretrained=pretrained)
 
     # Only EfficientNet and MobileNetV3 models have support for batchnorm params or drop_connect_rate passed as args
-    is_efficientnet = is_model_in_modules(model_name, ['efficientnet', 'mobilenetv3'])
+    is_efficientnet = is_model_in_modules(model_name, ["efficientnet", "mobilenetv3"])
     if not is_efficientnet:
-        kwargs.pop('bn_tf', None)
-        kwargs.pop('bn_momentum', None)
-        kwargs.pop('bn_eps', None)
+        kwargs.pop("bn_tf", None)
+        kwargs.pop("bn_momentum", None)
+        kwargs.pop("bn_eps", None)
 
     # handle backwards compat with drop_connect -> drop_path change
-    drop_connect_rate = kwargs.pop('drop_connect_rate', None)
-    if drop_connect_rate is not None and kwargs.get('drop_path_rate', None) is None:
-        print("WARNING: 'drop_connect' as an argument is deprecated, please use 'drop_path'."
-              " Setting drop_path to %f." % drop_connect_rate)
-        kwargs['drop_path_rate'] = drop_connect_rate
+    drop_connect_rate = kwargs.pop("drop_connect_rate", None)
+    if drop_connect_rate is not None and kwargs.get("drop_path_rate", None) is None:
+        print(
+            "WARNING: 'drop_connect' as an argument is deprecated, please use 'drop_path'."
+            " Setting drop_path to %f." % drop_connect_rate
+        )
+        kwargs["drop_path_rate"] = drop_connect_rate
 
     # Parameters that aren't supported by all models or are intended to only override model defaults if set
     # should default to None in command line args/cfg. Remove them if they are present and not set so that
@@ -52,7 +55,7 @@ def create_model(
             create_fn = model_entrypoint(model_name)
             model = create_fn(**model_args, **kwargs)
         else:
-            raise RuntimeError('Unknown model (%s)' % model_name)
+            raise RuntimeError("Unknown model (%s)" % model_name)
 
     if checkpoint_path:
         load_checkpoint(model, checkpoint_path)

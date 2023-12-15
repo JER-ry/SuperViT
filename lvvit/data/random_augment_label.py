@@ -11,15 +11,14 @@ import numpy as np
 from scipy import ndimage
 import torch
 
-_PIL_VER = tuple([int(x) for x in PIL.__version__.split('.')[:2]])
+_PIL_VER = tuple([int(x) for x in PIL.__version__.split(".")[:2]])
 
 _FILL = (128, 128, 128)
 
 
-
 # This signifies the max integer that the controller RNN could predict for the
 # augmentation scheme.
-_MAX_LEVEL = 10.
+_MAX_LEVEL = 10.0
 
 _HPARAMS_DEFAULT = dict(
     translate_const=250,
@@ -30,32 +29,38 @@ _RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
 
 
 def _interpolation(kwargs):
-    interpolation = kwargs.pop('resample', Image.BILINEAR)
+    interpolation = kwargs.pop("resample", Image.BILINEAR)
     if isinstance(interpolation, (list, tuple)):
         return random.choice(interpolation)
     else:
         return interpolation
 
+
 def affine_label(label, matrix):
-    
     # label: 2, k, H, W
     # label[0] value, label[1] index
-    a,b,c,d,e,f = matrix
-    affine_matrix = [[1,0,0,0],[0,a,b,c],[0,d,e,f]]
-    value = ndimage.affine_transform(label[0],matrix=affine_matrix, order=0, mode="constant")
-    index = ndimage.affine_transform(label[1],matrix=affine_matrix, order=0, mode="nearest")
+    a, b, c, d, e, f = matrix
+    affine_matrix = [[1, 0, 0, 0], [0, a, b, c], [0, d, e, f]]
+    value = ndimage.affine_transform(
+        label[0], matrix=affine_matrix, order=0, mode="constant"
+    )
+    index = ndimage.affine_transform(
+        label[1], matrix=affine_matrix, order=0, mode="nearest"
+    )
 
-    return torch.from_numpy(np.stack([value, index],axis=0))
+    return torch.from_numpy(np.stack([value, index], axis=0))
+
 
 def _check_args_tf(kwargs):
-    if 'fillcolor' in kwargs and _PIL_VER < (5, 0):
-        kwargs.pop('fillcolor')
-    kwargs['resample'] = _interpolation(kwargs)
+    if "fillcolor" in kwargs and _PIL_VER < (5, 0):
+        kwargs.pop("fillcolor")
+    kwargs["resample"] = _interpolation(kwargs)
 
 
 def shear_x(img, factor, **kwargs):
     _check_args_tf(kwargs)
     return img.transform(img.size, Image.AFFINE, (1, factor, 0, 0, 1, 0), **kwargs)
+
 
 def shear_y_label(label, factor):
     return affine_label(label, (1, factor, 0, 0, 1, 0))
@@ -65,13 +70,16 @@ def shear_y(img, factor, **kwargs):
     _check_args_tf(kwargs)
     return img.transform(img.size, Image.AFFINE, (1, 0, 0, factor, 1, 0), **kwargs)
 
+
 def shear_x_label(label, factor):
     return affine_label(label, (1, 0, 0, factor, 1, 0))
+
 
 def translate_x_rel(img, pct, **kwargs):
     pixels = pct * img.size[0]
     _check_args_tf(kwargs)
     return img.transform(img.size, Image.AFFINE, (1, 0, pixels, 0, 1, 0), **kwargs)
+
 
 def translate_y_rel_label(label, pct):
     pixels = pct * label.size(2)
@@ -82,6 +90,7 @@ def translate_y_rel(img, pct, **kwargs):
     pixels = pct * img.size[1]
     _check_args_tf(kwargs)
     return img.transform(img.size, Image.AFFINE, (1, 0, 0, 0, 1, pixels), **kwargs)
+
 
 def translate_x_rel_label(label, pct):
     pixels = pct * label.size(3)
@@ -127,10 +136,11 @@ def rotate(img, degrees, **kwargs):
         matrix[5] += rotn_center[1]
         return img.transform(img.size, Image.AFFINE, matrix, **kwargs)
     else:
-        return img.rotate(degrees, resample=kwargs['resample'])
+        return img.rotate(degrees, resample=kwargs["resample"])
+
 
 def rotate_label(label, degrees):
-    _,_, w, h = label.size()
+    _, _, w, h = label.size()
     post_trans = (0, 0)
     rotn_center = (w / 2.0, h / 2.0)
     angle = math.radians(degrees)
@@ -215,85 +225,85 @@ def _randomly_negate(v):
 
 def _rotate_level_to_arg(level, _hparams):
     # range [-30, 30]
-    level = (level / _MAX_LEVEL) * 30.
+    level = (level / _MAX_LEVEL) * 30.0
     level = _randomly_negate(level)
-    return level,
+    return (level,)
 
 
 def _enhance_level_to_arg(level, _hparams):
     # range [0.1, 1.9]
-    return (level / _MAX_LEVEL) * 1.8 + 0.1,
+    return ((level / _MAX_LEVEL) * 1.8 + 0.1,)
 
 
 def _enhance_increasing_level_to_arg(level, _hparams):
     # the 'no change' level is 1.0, moving away from that towards 0. or 2.0 increases the enhancement blend
     # range [0.1, 1.9]
-    level = (level / _MAX_LEVEL) * .9
+    level = (level / _MAX_LEVEL) * 0.9
     level = 1.0 + _randomly_negate(level)
-    return level,
+    return (level,)
 
 
 def _shear_level_to_arg(level, _hparams):
     # range [-0.3, 0.3]
     level = (level / _MAX_LEVEL) * 0.3
     level = _randomly_negate(level)
-    return level,
+    return (level,)
 
 
 def _translate_abs_level_to_arg(level, hparams):
-    translate_const = hparams['translate_const']
+    translate_const = hparams["translate_const"]
     level = (level / _MAX_LEVEL) * float(translate_const)
     level = _randomly_negate(level)
-    return level,
+    return (level,)
 
 
 def _translate_rel_level_to_arg(level, hparams):
     # default range [-0.45, 0.45]
-    translate_pct = hparams.get('translate_pct', 0.45)
+    translate_pct = hparams.get("translate_pct", 0.45)
     level = (level / _MAX_LEVEL) * translate_pct
     level = _randomly_negate(level)
-    return level,
+    return (level,)
 
 
 def _posterize_level_to_arg(level, _hparams):
     # As per Tensorflow TPU EfficientNet impl
     # range [0, 4], 'keep 0 up to 4 MSB of original image'
     # intensity/severity of augmentation decreases with level
-    return int((level / _MAX_LEVEL) * 4),
+    return (int((level / _MAX_LEVEL) * 4),)
 
 
 def _posterize_increasing_level_to_arg(level, hparams):
     # As per Tensorflow models research and UDA impl
     # range [4, 0], 'keep 4 down to 0 MSB of original image',
     # intensity/severity of augmentation increases with level
-    return 4 - _posterize_level_to_arg(level, hparams)[0],
+    return (4 - _posterize_level_to_arg(level, hparams)[0],)
 
 
 def _posterize_original_level_to_arg(level, _hparams):
     # As per original AutoAugment paper description
     # range [4, 8], 'keep 4 up to 8 MSB of image'
     # intensity/severity of augmentation decreases with level
-    return int((level / _MAX_LEVEL) * 4) + 4,
+    return (int((level / _MAX_LEVEL) * 4) + 4,)
 
 
 def _solarize_level_to_arg(level, _hparams):
     # range [0, 256]
     # intensity/severity of augmentation decreases with level
-    return int((level / _MAX_LEVEL) * 256),
+    return (int((level / _MAX_LEVEL) * 256),)
 
 
 def _solarize_increasing_level_to_arg(level, _hparams):
     # range [0, 256]
     # intensity/severity of augmentation increases with level
-    return 256 - _solarize_level_to_arg(level, _hparams)[0],
+    return (256 - _solarize_level_to_arg(level, _hparams)[0],)
 
 
 def _solarize_add_level_to_arg(level, _hparams):
     # range [0, 110]
-    return int((level / _MAX_LEVEL) * 110),
+    return (int((level / _MAX_LEVEL) * 110),)
+
 
 class AugmentOp:
-
     def __init__(self, name, prob=0.5, magnitude=10, hparams=None):
         hparams = hparams or _HPARAMS_DEFAULT
         self.name = name
@@ -304,15 +314,17 @@ class AugmentOp:
         self.magnitude = magnitude
         self.hparams = hparams.copy()
         self.kwargs = dict(
-            fillcolor=hparams['img_mean'] if 'img_mean' in hparams else _FILL,
-            resample=hparams['interpolation'] if 'interpolation' in hparams else _RANDOM_INTERPOLATION,
+            fillcolor=hparams["img_mean"] if "img_mean" in hparams else _FILL,
+            resample=hparams["interpolation"]
+            if "interpolation" in hparams
+            else _RANDOM_INTERPOLATION,
         )
 
         # If magnitude_std is > 0, we introduce some randomness
         # in the usually fixed policy and sample magnitude from a normal distribution
         # with mean `magnitude` and std-dev of `magnitude_std`.
         # NOTE This is my own hack, being tested, not in papers or reference impls.
-        self.magnitude_std = self.hparams.get('magnitude_std', 0)
+        self.magnitude_std = self.hparams.get("magnitude_std", 0)
 
     def __call__(self, img, label):
         if self.prob < 1.0 and random.random() > self.prob:
@@ -321,158 +333,161 @@ class AugmentOp:
         if self.magnitude_std and self.magnitude_std > 0:
             magnitude = random.gauss(magnitude, self.magnitude_std)
         magnitude = min(_MAX_LEVEL, max(0, magnitude))  # clip to valid range
-        level_args = self.level_fn(magnitude, self.hparams) if self.level_fn is not None else tuple()
+        level_args = (
+            self.level_fn(magnitude, self.hparams)
+            if self.level_fn is not None
+            else tuple()
+        )
         if self.label_fn is not None:
-
             aug_label = self.label_fn(label, *level_args)
         else:
             aug_label = label
         return self.aug_fn(img, *level_args, **self.kwargs), aug_label
 
+
 LEVEL_TO_ARG = {
-    'AutoContrast': None,
-    'Equalize': None,
-    'Invert': None,
-    'Rotate': _rotate_level_to_arg,
+    "AutoContrast": None,
+    "Equalize": None,
+    "Invert": None,
+    "Rotate": _rotate_level_to_arg,
     # There are several variations of the posterize level scaling in various Tensorflow/Google repositories/papers
-    'Posterize': _posterize_level_to_arg,
-    'PosterizeIncreasing': _posterize_increasing_level_to_arg,
-    'PosterizeOriginal': _posterize_original_level_to_arg,
-    'Solarize': _solarize_level_to_arg,
-    'SolarizeIncreasing': _solarize_increasing_level_to_arg,
-    'SolarizeAdd': _solarize_add_level_to_arg,
-    'Color': _enhance_level_to_arg,
-    'ColorIncreasing': _enhance_increasing_level_to_arg,
-    'Contrast': _enhance_level_to_arg,
-    'ContrastIncreasing': _enhance_increasing_level_to_arg,
-    'Brightness': _enhance_level_to_arg,
-    'BrightnessIncreasing': _enhance_increasing_level_to_arg,
-    'Sharpness': _enhance_level_to_arg,
-    'SharpnessIncreasing': _enhance_increasing_level_to_arg,
-    'ShearX': _shear_level_to_arg,
-    'ShearY': _shear_level_to_arg,
-    'TranslateX': _translate_abs_level_to_arg,
-    'TranslateY': _translate_abs_level_to_arg,
-    'TranslateXRel': _translate_rel_level_to_arg,
-    'TranslateYRel': _translate_rel_level_to_arg,
+    "Posterize": _posterize_level_to_arg,
+    "PosterizeIncreasing": _posterize_increasing_level_to_arg,
+    "PosterizeOriginal": _posterize_original_level_to_arg,
+    "Solarize": _solarize_level_to_arg,
+    "SolarizeIncreasing": _solarize_increasing_level_to_arg,
+    "SolarizeAdd": _solarize_add_level_to_arg,
+    "Color": _enhance_level_to_arg,
+    "ColorIncreasing": _enhance_increasing_level_to_arg,
+    "Contrast": _enhance_level_to_arg,
+    "ContrastIncreasing": _enhance_increasing_level_to_arg,
+    "Brightness": _enhance_level_to_arg,
+    "BrightnessIncreasing": _enhance_increasing_level_to_arg,
+    "Sharpness": _enhance_level_to_arg,
+    "SharpnessIncreasing": _enhance_increasing_level_to_arg,
+    "ShearX": _shear_level_to_arg,
+    "ShearY": _shear_level_to_arg,
+    "TranslateX": _translate_abs_level_to_arg,
+    "TranslateY": _translate_abs_level_to_arg,
+    "TranslateXRel": _translate_rel_level_to_arg,
+    "TranslateYRel": _translate_rel_level_to_arg,
 }
 
 
 NAME_TO_OP = {
-    'AutoContrast': auto_contrast,
-    'Equalize': equalize,
-    'Invert': invert,
-    'Rotate': rotate,
-    'Posterize': posterize,
-    'PosterizeIncreasing': posterize,
-    'PosterizeOriginal': posterize,
-    'Solarize': solarize,
-    'SolarizeIncreasing': solarize,
-    'SolarizeAdd': solarize_add,
-    'Color': color,
-    'ColorIncreasing': color,
-    'Contrast': contrast,
-    'ContrastIncreasing': contrast,
-    'Brightness': brightness,
-    'BrightnessIncreasing': brightness,
-    'Sharpness': sharpness,
-    'SharpnessIncreasing': sharpness,
-    'ShearX': shear_x,
-    'ShearY': shear_y,
-    'TranslateX': translate_x_abs,
-    'TranslateY': translate_y_abs,
-    'TranslateXRel': translate_x_rel,
-    'TranslateYRel': translate_y_rel,
+    "AutoContrast": auto_contrast,
+    "Equalize": equalize,
+    "Invert": invert,
+    "Rotate": rotate,
+    "Posterize": posterize,
+    "PosterizeIncreasing": posterize,
+    "PosterizeOriginal": posterize,
+    "Solarize": solarize,
+    "SolarizeIncreasing": solarize,
+    "SolarizeAdd": solarize_add,
+    "Color": color,
+    "ColorIncreasing": color,
+    "Contrast": contrast,
+    "ContrastIncreasing": contrast,
+    "Brightness": brightness,
+    "BrightnessIncreasing": brightness,
+    "Sharpness": sharpness,
+    "SharpnessIncreasing": sharpness,
+    "ShearX": shear_x,
+    "ShearY": shear_y,
+    "TranslateX": translate_x_abs,
+    "TranslateY": translate_y_abs,
+    "TranslateXRel": translate_x_rel,
+    "TranslateYRel": translate_y_rel,
 }
 # Remove TranslateX and TranslateY here since it is actually not used in random aug
 # Only spatial op should be applied to the label map
 NAME_TO_LABELOP = {
-    'AutoContrast': None,
-    'Equalize': None,
-    'Invert': None,
-    'Rotate': rotate_label,
-    'Posterize': None,
-    'PosterizeIncreasing': None,
-    'PosterizeOriginal': None,
-    'Solarize': None,
-    'SolarizeIncreasing': None,
-    'SolarizeAdd': None,
-    'Color': None,
-    'ColorIncreasing': None,
-    'Contrast': None,
-    'ContrastIncreasing': None,
-    'Brightness': None,
-    'BrightnessIncreasing': None,
-    'Sharpness': None,
-    'SharpnessIncreasing': None,
-    'ShearX': shear_x_label,
-    'ShearY': shear_y_label,
-    'TranslateX': None,
-    'TranslateY': None,
-    'TranslateXRel': translate_x_rel_label,
-    'TranslateYRel': translate_y_rel_label,
+    "AutoContrast": None,
+    "Equalize": None,
+    "Invert": None,
+    "Rotate": rotate_label,
+    "Posterize": None,
+    "PosterizeIncreasing": None,
+    "PosterizeOriginal": None,
+    "Solarize": None,
+    "SolarizeIncreasing": None,
+    "SolarizeAdd": None,
+    "Color": None,
+    "ColorIncreasing": None,
+    "Contrast": None,
+    "ContrastIncreasing": None,
+    "Brightness": None,
+    "BrightnessIncreasing": None,
+    "Sharpness": None,
+    "SharpnessIncreasing": None,
+    "ShearX": shear_x_label,
+    "ShearY": shear_y_label,
+    "TranslateX": None,
+    "TranslateY": None,
+    "TranslateXRel": translate_x_rel_label,
+    "TranslateYRel": translate_y_rel_label,
 }
 
 
 _RAND_TRANSFORMS = [
-    'AutoContrast',
-    'Equalize',
-    'Invert',
-    'Rotate',
-    'Posterize',
-    'Solarize',
-    'SolarizeAdd',
-    'Color',
-    'Contrast',
-    'Brightness',
-    'Sharpness',
-    'ShearX',
-    'ShearY',
-    'TranslateXRel',
-    'TranslateYRel',
-    #'Cutout' 
+    "AutoContrast",
+    "Equalize",
+    "Invert",
+    "Rotate",
+    "Posterize",
+    "Solarize",
+    "SolarizeAdd",
+    "Color",
+    "Contrast",
+    "Brightness",
+    "Sharpness",
+    "ShearX",
+    "ShearY",
+    "TranslateXRel",
+    "TranslateYRel",
+    #'Cutout'
 ]
 
 
 _RAND_INCREASING_TRANSFORMS = [
-    'AutoContrast',
-    'Equalize',
-    'Invert',
-    'Rotate',
-    'PosterizeIncreasing',
-    'SolarizeIncreasing',
-    'SolarizeAdd',
-    'ColorIncreasing',
-    'ContrastIncreasing',
-    'BrightnessIncreasing',
-    'SharpnessIncreasing',
-    'ShearX',
-    'ShearY',
-    'TranslateXRel',
-    'TranslateYRel',
+    "AutoContrast",
+    "Equalize",
+    "Invert",
+    "Rotate",
+    "PosterizeIncreasing",
+    "SolarizeIncreasing",
+    "SolarizeAdd",
+    "ColorIncreasing",
+    "ContrastIncreasing",
+    "BrightnessIncreasing",
+    "SharpnessIncreasing",
+    "ShearX",
+    "ShearY",
+    "TranslateXRel",
+    "TranslateYRel",
     #'Cutout'
 ]
-
 
 
 # These experimental weights are based loosely on the relative improvements mentioned in paper.
 # They may not result in increased performance, but could likely be tuned to so.
 _RAND_CHOICE_WEIGHTS_0 = {
-    'Rotate': 0.3,
-    'ShearX': 0.2,
-    'ShearY': 0.2,
-    'TranslateXRel': 0.1,
-    'TranslateYRel': 0.1,
-    'Color': .025,
-    'Sharpness': 0.025,
-    'AutoContrast': 0.025,
-    'Solarize': .005,
-    'SolarizeAdd': .005,
-    'Contrast': .005,
-    'Brightness': .005,
-    'Equalize': .005,
-    'Posterize': 0,
-    'Invert': 0,
+    "Rotate": 0.3,
+    "ShearX": 0.2,
+    "ShearY": 0.2,
+    "TranslateXRel": 0.1,
+    "TranslateYRel": 0.1,
+    "Color": 0.025,
+    "Sharpness": 0.025,
+    "AutoContrast": 0.025,
+    "Solarize": 0.005,
+    "SolarizeAdd": 0.005,
+    "Contrast": 0.005,
+    "Brightness": 0.005,
+    "Equalize": 0.005,
+    "Posterize": 0,
+    "Invert": 0,
 }
 
 
@@ -488,14 +503,17 @@ def _select_rand_weights(weight_idx=0, transforms=None):
 def rand_augment_ops(magnitude=10, hparams=None, transforms=None):
     hparams = hparams or _HPARAMS_DEFAULT
     transforms = transforms or _RAND_TRANSFORMS
-    return [AugmentOp(
-        name, prob=0.5, magnitude=magnitude, hparams=hparams) for name in transforms]
+    return [
+        AugmentOp(name, prob=0.5, magnitude=magnitude, hparams=hparams)
+        for name in transforms
+    ]
 
 
 class RandAugment:
-    '''
+    """
     Apply RandAug on both image and dense label map
-    '''
+    """
+
     def __init__(self, ops, num_layers=2, choice_weights=None):
         self.ops = ops
         self.num_layers = num_layers
@@ -504,7 +522,11 @@ class RandAugment:
     def __call__(self, img, label):
         # no replacement when using weighted choice
         ops = np.random.choice(
-            self.ops, self.num_layers, replace=self.choice_weights is None, p=self.choice_weights)
+            self.ops,
+            self.num_layers,
+            replace=self.choice_weights is None,
+            p=self.choice_weights,
+        )
         for op in ops:
             img, label = op(img, label)
         return img, label
@@ -532,29 +554,30 @@ def rand_augment_transform(config_str, hparams):
     num_layers = 2  # default to 2 ops per image
     weight_idx = None  # default to no probability weights for op choice
     transforms = _RAND_TRANSFORMS
-    config = config_str.split('-')
-    assert config[0] == 'rand'
+    config = config_str.split("-")
+    assert config[0] == "rand"
     config = config[1:]
     for c in config:
-        cs = re.split(r'(\d.*)', c)
+        cs = re.split(r"(\d.*)", c)
         if len(cs) < 2:
             continue
         key, val = cs[:2]
-        if key == 'mstd':
+        if key == "mstd":
             # noise param injected via hparams for now
-            hparams.setdefault('magnitude_std', float(val))
-        elif key == 'inc':
+            hparams.setdefault("magnitude_std", float(val))
+        elif key == "inc":
             if bool(val):
                 transforms = _RAND_INCREASING_TRANSFORMS
-        elif key == 'm':
+        elif key == "m":
             magnitude = int(val)
-        elif key == 'n':
+        elif key == "n":
             num_layers = int(val)
-        elif key == 'w':
+        elif key == "w":
             weight_idx = int(val)
         else:
-            assert False, 'Unknown RandAugment config section'
-    ra_ops = rand_augment_ops(magnitude=magnitude, hparams=hparams, transforms=transforms)
+            assert False, "Unknown RandAugment config section"
+    ra_ops = rand_augment_ops(
+        magnitude=magnitude, hparams=hparams, transforms=transforms
+    )
     choice_weights = None if weight_idx is None else _select_rand_weights(weight_idx)
     return RandAugment(ra_ops, num_layers, choice_weights=choice_weights)
-
