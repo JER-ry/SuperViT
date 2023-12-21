@@ -36,7 +36,7 @@ def get_args_parser():
     )
     parser.add_argument("--batch-size", default=64, type=int)
     parser.add_argument("--epochs", default=300, type=int)
-    parser.add_argument("--config_yaml", default="ravit/recipe.yaml", type=str)
+    parser.add_argument("--config_yaml", default="recipe.yaml", type=str)
 
     # Model parameters
     parser.add_argument(

@@ -47,13 +47,13 @@ distillation_type: "none"
 distillation_alpha: 0.5
 distillation_tau: 1.0
 finetune: ""
-data_path: "ImageNet"
+data_path: "../ImageNet"
 data_set: "IMNET"
 inat_category: "name"
-output_dir: "ravit/output112"
+output_dir: "../SuperViT_outputs"
 device: "cuda"
 seed: 0
-resume: "ravit/output112/model_best.pth"
+resume: "output112/model_best.pth"
 autoresume: false
 start_epoch: 0
 eval: true
