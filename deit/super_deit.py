@@ -418,7 +418,7 @@ class VisionTransformer(nn.Module):
         for index, blk in enumerate(self.blocks):
             layer_keep_ratio = keep_ratio if index in [3, 6, 9] else 1
             x, score = blk(x, layer_keep_ratio)
-            attn_scores = torch.concat([attn_scores, score.unsqueeze(1)], dim=1)
+            # attn_scores = torch.concat([attn_scores, score.unsqueeze(1)], dim=1)
             # TODO this way of collecting attn_scores requires keep_ratio=1 in function VisionTransformer.forward
             # since if you drop some attention heads, the dim would be different. you may consider using a list in that case.
 
@@ -433,7 +433,7 @@ class VisionTransformer(nn.Module):
         x = self.pre_logits(x)
         return x, attn_scores
 
-    def forward(self, x, img_size=None, keep_ratio=1):
+    def forward(self, x, img_size=None, keep_ratio=0.7):
         if img_size is None:
             img_size = self.img_size_list[-1]
         x = F.interpolate(x, (img_size, img_size), mode="bilinear", align_corners=True)

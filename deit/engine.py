@@ -185,7 +185,7 @@ def super_evaluate(data_loader, model, device):
                 "images": images_hash_all_batches,
                 "target": target_all_batches,
                 "outputs": outputs_all_batches,
-                "attn_scores": attn_scores_all_batches,
+                # "attn_scores": attn_scores_all_batches,
             },
             f,
         )
