@@ -198,7 +198,7 @@ class Block(nn.Module):
             important_token_num = math.ceil(keep_ratio * cur_token_num)
             sorted_index = torch.argsort(score, dim=1, descending=True)
             important_index = sorted_index[:, :important_token_num]
-            cls_index = torch.zeros((B, 1)).cuda().long()
+            cls_index = torch.zeros((B, 1), device=x.device).long()
             important_index = torch.cat((cls_index, important_index + 1), dim=1)
             x = batch_index_select(x, important_index)
         x = x + self.drop_path(self.mlp(self.norm2(x)))

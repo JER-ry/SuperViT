@@ -37,7 +37,7 @@ def get_training_sub_network(
 
 
 def get_testing_sub_network(
-    img_size_list=[96, 112, 128, 160, 192, 224], keep_ratio_list=[1]
+    img_size_list=[96, 112, 128, 160, 192, 224], keep_ratio_list=[0.7]
 ):
     sub_network = []
     for img_size in img_size_list:
